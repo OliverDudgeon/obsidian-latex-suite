@@ -4,6 +4,11 @@ import { DEFAULT_SNIPPETS } from "src/utils/default_snippets";
 import { DEFAULT_SNIPPET_VARIABLES } from "src/utils/default_snippet_variables";
 import { DEFAULT_CONCEAL_MAP_JSON } from "../editor_extensions/conceal_maps";
 
+export type ParsedCustomConcealMap = {
+	symbols: Record<string, string>;
+	functions: Record<string, [string, string]>;
+};
+
 export type snippetDebugLevel = "off" | "info" | "verbose";
 
 type CMKeyMap = string;
@@ -70,7 +75,7 @@ interface LatexSuiteParsedSettings {
 	taboutClosingSymbols: Set<string>;
 	autoEnlargeBracketsTriggers: string[];
 	forceMathLanguages: string[];
-	customConcealMap: Record<string, string>;
+	customConcealMap: ParsedCustomConcealMap;
 }
 
 export type LatexSuitePluginSettings = {snippets: string, snippetVariables: string} & LatexSuiteBasicSettings & LatexSuiteRawSettings & LatexSuiteCMKeymapSettings;
@@ -136,18 +141,30 @@ export function processLatexSuiteSettings(snippets: Snippet[], settings: LatexSu
 		return str.replace(/\s/g,"").split(",");
 	}
 
-	function getCustomConcealMap(mapStr: string): Record<string, string> {
+	function getCustomConcealMap(mapStr: string): ParsedCustomConcealMap {
+		const symbols: Record<string, string> = {};
+		const functions: Record<string, [string, string]> = {};
 		try {
 			const parsed = JSON.parse(mapStr);
 			if (typeof parsed !== "object" || Array.isArray(parsed) || parsed === null) {
-				return {};
+				return { symbols, functions };
 			}
-			return Object.fromEntries(
-				Object.entries(parsed).filter(([, v]) => typeof v === "string")
-			) as Record<string, string>;
+			for (const [key, value] of Object.entries(parsed)) {
+				if (typeof value === "string") {
+					symbols[key] = value;
+				} else if (
+					Array.isArray(value) &&
+					value.length === 2 &&
+					typeof value[0] === "string" &&
+					typeof value[1] === "string"
+				) {
+					functions[key] = [value[0], value[1]];
+				}
+			}
 		} catch {
-			return {};
+			// invalid JSON — return empty maps (fallbacks apply at usage time)
 		}
+		return { symbols, functions };
 	}
 
 	function getAutofractionExcludedEnvs(envsStr: string) {

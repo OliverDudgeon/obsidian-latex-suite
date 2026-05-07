@@ -1205,10 +1205,18 @@ export const mathfrak = {
 	"Z": "ℨ",
 }
 
+export const DEFAULT_CONCEAL_FUNCTIONS: Record<string, [string, string]> = {
+	"bra": ["〈", "|"],
+	"ket": ["|", "〉"],
+	"set": ["{", "}"],
+};
+
 export const DEFAULT_CONCEAL_MAP_JSON: string = JSON.stringify(
 	Object.fromEntries(
-		Object.entries({...greek, ...cmd_symbols})
-			.sort(([a], [b]) => a.localeCompare(b))
+		[
+			...Object.entries({...greek, ...cmd_symbols}),
+			...Object.entries(DEFAULT_CONCEAL_FUNCTIONS),
+		].sort(([a], [b]) => a.localeCompare(b))
 	),
 	null, 2
 );

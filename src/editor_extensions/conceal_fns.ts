@@ -4,7 +4,8 @@ import { EditorView } from "@codemirror/view";
 import { getMathBoundsPlugin } from "src/utils/context";
 import { findMatchingBracket } from "src/utils/editor_utils";
 import { ConcealSpec, mkConcealSpec } from "./conceal";
-import { greek, cmd_symbols, map_super, map_sub, fractions, brackets, mathscrcal, mathbb, operators, not_remap as raw_not_remap } from "./conceal_maps";
+import { greek, cmd_symbols, map_super, map_sub, fractions, brackets, mathscrcal, mathbb, operators, not_remap as raw_not_remap, DEFAULT_CONCEAL_FUNCTIONS } from "./conceal_maps";
+import type { ParsedCustomConcealMap } from "src/settings/settings";
 
 
 
@@ -351,11 +352,10 @@ function concealAtoZ(eqn: string, prefix: string, suffix: string, symbolMap: {[k
 function concealBraKet(eqn: string): ConcealSpec[] {
 	const langle = "〈";
 	const rangle = "〉";
-	const vert = "|";
 
 	const specs: ConcealSpec[] = [];
 
-	for (const match of eqn.matchAll(/\\(braket|bra|ket){/g)) {
+	for (const match of eqn.matchAll(/\\(braket){/g)) {
 		// index of the "}"
 		const contentEnd = findMatchingBracket(eqn, match.index, "{", "}", false);
 		if (contentEnd === -1) continue;
@@ -364,16 +364,45 @@ function concealBraKet(eqn: string): ConcealSpec[] {
 		// index of the "{"
 		const contentStart = commandStart + match[0].length - 1;
 
-		const type = match[1];
-		const left = type === "ket" ? vert : langle;
-		const right = type === "bra" ? vert : rangle;
-
 		specs.push(mkConcealSpec(
 			// Hide the command
 			{ start: commandStart, end: contentStart, text: "" },
 			// Replace the "{"
-			{ start: contentStart, end: contentStart + 1, text: left, class: "cm-bracket" },
+			{ start: contentStart, end: contentStart + 1, text: langle, class: "cm-bracket" },
 			// Replace the "}"
+			{ start: contentEnd, end: contentEnd + 1, text: rangle, class: "cm-bracket" },
+		));
+	}
+
+	return specs;
+}
+
+function concealCustomFunctions(
+	eqn: string,
+	functionMap: Record<string, [string, string]>,
+): ConcealSpec[] {
+	const entries = Object.entries(functionMap);
+	if (entries.length === 0) return [];
+
+	const cmdNames = entries
+		.map(([k]) => escapeRegex(k))
+		.sort((a, b) => b.length - a.length);
+
+	const regex = new RegExp(`\\\\(${cmdNames.join("|")}){`, "g");
+	const specs: ConcealSpec[] = [];
+
+	for (const match of eqn.matchAll(regex)) {
+		const cmdName = match[1];
+		const [left, right] = functionMap[cmdName];
+
+		const commandStart = match.index;
+		const contentStart = commandStart + match[0].length - 1;
+		const contentEnd = findMatchingBracket(eqn, commandStart, "{", "}", false);
+		if (contentEnd === -1) continue;
+
+		specs.push(mkConcealSpec(
+			{ start: commandStart, end: contentStart, text: "" },
+			{ start: contentStart, end: contentStart + 1, text: left, class: "cm-bracket" },
 			{ start: contentEnd, end: contentEnd + 1, text: right, class: "cm-bracket" },
 		));
 	}
@@ -472,15 +501,20 @@ export type ConcealCachedEquations = Record<string, ConcealSpec[]>;
 export function conceal(
 	view: EditorView,
 	cached_equations: ConcealCachedEquations,
-	customConcealMap: Record<string, string>,
+	customConcealMap: ParsedCustomConcealMap,
 ): { specs: ConcealSpec[]; cached_equations: ConcealCachedEquations } {
-	const effectiveSymbols: Record<string, string> = Object.keys(customConcealMap).length > 0
+	const { symbols: customSymbols, functions: customFunctions } = customConcealMap;
+
+	const effectiveSymbols: Record<string, string> = Object.keys(customSymbols).length > 0
 		? Object.fromEntries(
-			Object.entries(customConcealMap)
+			Object.entries(customSymbols)
 				.filter(([, v]) => v !== "")
 				.sort((a, b) => b[0].length - a[0].length)
 		  )
 		: ALL_SYMBOLS;
+
+	const effectiveFunctions: Record<string, [string, string]> =
+		Object.keys(customFunctions).length > 0 ? customFunctions : DEFAULT_CONCEAL_FUNCTIONS;
 
 	const equations = getMathBoundsPlugin(view).getEquations(view.state);
 	const new_equations: typeof cached_equations = {};
@@ -511,7 +545,7 @@ export function conceal(
 			...concealModified_A_to_Z_0_to_9(eqn, mathbb),
 			...concealText(eqn),
 			...concealBraKet(eqn),
-			...concealSet(eqn),
+			...concealCustomFunctions(eqn, effectiveFunctions),
 			...concealFraction(eqn),
 			...concealOperators(eqn, operators),
 			...concealOperatorname(eqn),

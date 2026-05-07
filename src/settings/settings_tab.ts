@@ -185,15 +185,16 @@ export class LatexSuiteSettingTab extends PluginSettingTab {
 
 		const fragment3 = new DocumentFragment();
 		fragment3.createDiv({}, div => div.setText(
-			"The complete symbol conceal map. Keys are LaTeX command names (without leading backslash), " +
-			"values are the replacement strings. Remove an entry to disable that concealment."
+			"The complete symbol and function conceal map. " +
+			"String values replace the command with a symbol. " +
+			"Two-element array values wrap a single-argument command."
 		));
 		fragment3.createDiv({}, div => div.innerHTML =
-			`e.g. add <code>"lVert": "‖"</code> to conceal <code>\\lVert</code>`
+			`e.g. <code>"lVert": "‖"</code> or <code>"myket": ["|", "⟩"]</code> to conceal <code>\\myket{x}</code> as |x⟩`
 		);
 
 		const concealMapSetting = new Setting(containerEl)
-			.setName("Symbol conceal map")
+			.setName("Conceal map")
 			.setDesc(fragment3)
 			.setClass("snippets-text-area");
 
