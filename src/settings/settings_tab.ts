@@ -5,6 +5,7 @@ import { parseKeyName, parseSnippetVariables, parseSnippets } from "src/snippets
 import { DEFAULT_SNIPPETS } from "src/utils/default_snippets";
 import LatexSuitePlugin from "../main";
 import { DEFAULT_SETTINGS, LatexSuiteCMKeymapSettings } from "./settings";
+import { DEFAULT_CONCEAL_MAP_JSON } from "../editor_extensions/conceal_maps";
 import { FileSuggest } from "./ui/file_suggest";
 import { basicSetup } from "./ui/snippets_editor/extensions";
 import { getVimSelectModeCommand, vimCommand, getVimVisualModeCommand, getVimEditorCommands, getVimRunMatrixEnterCommand } from "src/features/editor_commands";
@@ -14,6 +15,7 @@ import { Vim } from "src/utils/vim_types";
 export class LatexSuiteSettingTab extends PluginSettingTab {
 	plugin: LatexSuitePlugin;
 	snippetsEditor: EditorView;
+	concealMapEditor: EditorView;
 	snippetsFileLocEl: HTMLElement;
 	snippetVariablesFileLocEl: HTMLElement;
 
@@ -24,6 +26,7 @@ export class LatexSuiteSettingTab extends PluginSettingTab {
 
 	hide() {
 		this.snippetsEditor?.destroy();
+		this.concealMapEditor?.destroy();
 	}
 
 	addHeading(containerEl: HTMLElement, name: string, icon = "math") {
@@ -179,6 +182,22 @@ export class LatexSuiteSettingTab extends PluginSettingTab {
 					}
 				})
 			);
+
+		const fragment3 = new DocumentFragment();
+		fragment3.createDiv({}, div => div.setText(
+			"The complete symbol conceal map. Keys are LaTeX command names (without leading backslash), " +
+			"values are the replacement strings. Remove an entry to disable that concealment."
+		));
+		fragment3.createDiv({}, div => div.innerHTML =
+			`e.g. add <code>"lVert": "‖"</code> to conceal <code>\\lVert</code>`
+		);
+
+		const concealMapSetting = new Setting(containerEl)
+			.setName("Symbol conceal map")
+			.setDesc(fragment3)
+			.setClass("snippets-text-area");
+
+		this.createConcealMapEditor(concealMapSetting);
 
 	}
 
@@ -711,6 +730,74 @@ export class LatexSuiteSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				})
 			);
+	}
+
+	createConcealMapEditor(concealMapSetting: Setting) {
+		const customCSSWrapper = concealMapSetting.controlEl.createDiv("snippets-editor-wrapper");
+		const footer = concealMapSetting.controlEl.createDiv("snippets-footer");
+		const validity = footer.createDiv("snippets-editor-validity");
+
+		const validityIndicator = new ExtraButtonComponent(validity);
+		validityIndicator.setIcon("checkmark")
+			.extraSettingsEl.addClass("snippets-editor-validity-indicator");
+
+		const validityText = validity.createDiv("snippets-editor-validity-text");
+		validityText.addClass("setting-item-description");
+		validityText.style.padding = "0";
+
+		function updateValidityIndicator(success: boolean) {
+			validityIndicator.setIcon(success ? "checkmark" : "cross");
+			validityIndicator.extraSettingsEl.removeClass(success ? "invalid" : "valid");
+			validityIndicator.extraSettingsEl.addClass(success ? "valid" : "invalid");
+			validityText.setText(success ? "Saved" : "Invalid JSON. Changes not saved");
+		}
+
+		const extensions = [...basicSetup];
+
+		const change = EditorView.updateListener.of(async (v: ViewUpdate) => {
+			if (!v.docChanged) return;
+			const value = v.state.doc.toString();
+			let success = true;
+
+			try {
+				const parsed = JSON.parse(value);
+				if (typeof parsed !== "object" || Array.isArray(parsed) || parsed === null) {
+					success = false;
+				}
+			} catch {
+				success = false;
+			}
+
+			updateValidityIndicator(success);
+			if (!success) return;
+
+			this.plugin.settings.customConcealMap = value;
+			await this.plugin.saveSettings();
+		});
+
+		extensions.push(change);
+
+		this.concealMapEditor = createCMEditor(this.plugin.settings.customConcealMap, extensions);
+		customCSSWrapper.appendChild(this.concealMapEditor.dom);
+
+		const buttonsDiv = footer.createDiv("snippets-editor-buttons");
+		const reset = new ButtonComponent(buttonsDiv);
+		reset.setIcon("switch")
+			.setTooltip("Reset to default symbol map")
+			.onClick(() => {
+				new ConfirmationModal(this.plugin.app,
+					"Are you sure? This will reset the conceal map to the built-in defaults.",
+					button => button
+						.setButtonText("Reset to defaults")
+						.setWarning(),
+					async () => {
+						this.concealMapEditor.setState(EditorState.create({ doc: DEFAULT_CONCEAL_MAP_JSON, extensions }));
+						updateValidityIndicator(true);
+						this.plugin.settings.customConcealMap = DEFAULT_CONCEAL_MAP_JSON;
+						await this.plugin.saveSettings();
+					}
+				).open();
+			});
 	}
 
 	createSnippetsEditor(snippetsSetting: Setting) {

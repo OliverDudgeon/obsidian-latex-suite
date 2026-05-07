@@ -1204,3 +1204,11 @@ export const mathfrak = {
 	"Y": "𝔜",
 	"Z": "ℨ",
 }
+
+export const DEFAULT_CONCEAL_MAP_JSON: string = JSON.stringify(
+	Object.fromEntries(
+		Object.entries({...greek, ...cmd_symbols})
+			.sort(([a], [b]) => a.localeCompare(b))
+	),
+	null, 2
+);

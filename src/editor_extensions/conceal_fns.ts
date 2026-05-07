@@ -472,7 +472,16 @@ export type ConcealCachedEquations = Record<string, ConcealSpec[]>;
 export function conceal(
 	view: EditorView,
 	cached_equations: ConcealCachedEquations,
+	customConcealMap: Record<string, string>,
 ): { specs: ConcealSpec[]; cached_equations: ConcealCachedEquations } {
+	const effectiveSymbols: Record<string, string> = Object.keys(customConcealMap).length > 0
+		? Object.fromEntries(
+			Object.entries(customConcealMap)
+				.filter(([, v]) => v !== "")
+				.sort((a, b) => b[0].length - a[0].length)
+		  )
+		: ALL_SYMBOLS;
+
 	const equations = getMathBoundsPlugin(view).getEquations(view.state);
 	const new_equations: typeof cached_equations = {};
 
@@ -486,9 +495,9 @@ export function conceal(
 			...concealSymbols(eqn, "\\^", "", map_super),
 			...concealSymbols(eqn, "_", "", map_sub),
 			...concealSymbols(eqn, "\\\\frac", "", fractions),
-			...concealNotSymbols(eqn, ALL_SYMBOLS, not_remap),
-			...concealSupSub(eqn, true, ALL_SYMBOLS),
-			...concealSupSub(eqn, false, ALL_SYMBOLS),
+			...concealNotSymbols(eqn, effectiveSymbols, not_remap),
+			...concealSupSub(eqn, true, effectiveSymbols),
+			...concealSupSub(eqn, false, effectiveSymbols),
 			...concealModifier(eqn, "hat", "\u0302"),
 			...concealModifier(eqn, "dot", "\u0307"),
 			...concealModifier(eqn, "ddot", "\u0308"),

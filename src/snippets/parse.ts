@@ -17,15 +17,16 @@ function importModule(source: string, identifier: string): Promise<object> {
 }
 
 async function importRaw(module: string, identifier: string): Promise<unknown> {
-	let data: object;
+	let data: object | null = null;
 	try {
 		data = await importModule(module, identifier);
-	} catch (e) {
-		console.error(e)
+	} catch {
+		// first attempt failed; fall through to the export-default retry below
+	}
+	if (!data || !("default" in data)) {
 		try {
-		data = await importModule("export default " + module, identifier);
-		} catch (e) {
-			console.error(e)
+			data = await importModule("export default " + module, identifier);
+		} catch {
 			throw "Invalid format";
 		}
 	}

@@ -305,7 +305,14 @@ export const concealPlugin = ViewPlugin.fromClass(class {
 		if (!update.docChanged && !update.viewportChanged) {
 			this.updateFromConcealSpecs(this.concealSpecs, update);
 		} else {
-			const {specs: concealSpecs, cached_equations} = conceal(update.view, this.cached_equations);
+			const config = getLatexSuiteConfig(update.state);
+			if (update.startState) {
+				const prevConfig = getLatexSuiteConfig(update.startState);
+				if (JSON.stringify(prevConfig.customConcealMap) !== JSON.stringify(config.customConcealMap)) {
+					this.cached_equations = {};
+				}
+			}
+			const {specs: concealSpecs, cached_equations} = conceal(update.view, this.cached_equations, config.customConcealMap);
 			this.cached_equations = cached_equations;
 			this.concealSpecs = concealSpecs;
 			this.updateFromConcealSpecs(concealSpecs, update);

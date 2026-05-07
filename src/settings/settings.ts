@@ -2,6 +2,7 @@ import { Snippet } from "../snippets/snippets";
 import { Environment } from "../snippets/environment";
 import { DEFAULT_SNIPPETS } from "src/utils/default_snippets";
 import { DEFAULT_SNIPPET_VARIABLES } from "src/utils/default_snippet_variables";
+import { DEFAULT_CONCEAL_MAP_JSON } from "../editor_extensions/conceal_maps";
 
 export type snippetDebugLevel = "off" | "info" | "verbose";
 
@@ -60,6 +61,7 @@ interface LatexSuiteRawSettings {
 	taboutClosingSymbols: string;
 	autoEnlargeBracketsTriggers: string;
 	forceMathLanguages: string;
+	customConcealMap: string;
 }
 
 interface LatexSuiteParsedSettings {
@@ -68,6 +70,7 @@ interface LatexSuiteParsedSettings {
 	taboutClosingSymbols: Set<string>;
 	autoEnlargeBracketsTriggers: string[];
 	forceMathLanguages: string[];
+	customConcealMap: Record<string, string>;
 }
 
 export type LatexSuitePluginSettings = {snippets: string, snippetVariables: string} & LatexSuiteBasicSettings & LatexSuiteRawSettings & LatexSuiteCMKeymapSettings;
@@ -117,6 +120,7 @@ export const DEFAULT_SETTINGS: LatexSuitePluginSettings = {
 	taboutClosingSymbols: "), ], \\rbrack, \\}, \\rbrace, \\rangle, \\rvert, \\rVert, \\rfloor, \\rceil, \\urcorner, }",
 	autoEnlargeBracketsTriggers: "sum, int, frac, prod, bigcup, bigcap",
 	forceMathLanguages: "math",
+	customConcealMap: DEFAULT_CONCEAL_MAP_JSON,
 	snippetDebug: "off",
 	vimEnabled: false,
 	vimSelectMode: "<C-g>",
@@ -130,6 +134,20 @@ export function processLatexSuiteSettings(snippets: Snippet[], settings: LatexSu
 
 	function strToArray(str: string) {
 		return str.replace(/\s/g,"").split(",");
+	}
+
+	function getCustomConcealMap(mapStr: string): Record<string, string> {
+		try {
+			const parsed = JSON.parse(mapStr);
+			if (typeof parsed !== "object" || Array.isArray(parsed) || parsed === null) {
+				return {};
+			}
+			return Object.fromEntries(
+				Object.entries(parsed).filter(([, v]) => typeof v === "string")
+			) as Record<string, string>;
+		} catch {
+			return {};
+		}
 	}
 
 	function getAutofractionExcludedEnvs(envsStr: string) {
@@ -158,7 +176,8 @@ export function processLatexSuiteSettings(snippets: Snippet[], settings: LatexSu
 		taboutClosingSymbols: new Set<string>(strToArray(settings.taboutClosingSymbols)),
 		// Add backslash to triggers that are LaTeX commands
 		autoEnlargeBracketsTriggers: strToArray(settings.autoEnlargeBracketsTriggers)
-			.map(trigger => /[A-Za-z]+/.test(trigger) ? `\\${trigger}` : trigger), 
+			.map(trigger => /[A-Za-z]+/.test(trigger) ? `\\${trigger}` : trigger),
 		forceMathLanguages: strToArray(settings.forceMathLanguages),
+		customConcealMap: getCustomConcealMap(settings.customConcealMap),
 	}
 }
